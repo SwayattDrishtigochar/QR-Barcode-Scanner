@@ -9,7 +9,8 @@ const scanBatchSchema = new Schema({
         return arr && arr.length > 0;
       },
       message: 'QR codes array cannot be empty'
-    }
+    },
+    unique: true
   },
   binSize: {
     type: String,
