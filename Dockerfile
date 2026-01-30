@@ -18,4 +18,4 @@ WORKDIR /app
 COPY --from=build /app /app
 
 # Start server
-CMD ["node", "src/server.js"]
+CMD ["node", "server.js"]
