@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  barcode-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: barcode-backend
+    env_file:
+      - .env
+    restart: always
+    network_mode: host
