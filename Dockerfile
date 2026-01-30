@@ -1,21 +1,17 @@
-# ---------- Build stage ----------
-FROM node:18-alpine AS build
+FROM node:18-alpine
 
+# Create app directory
 WORKDIR /app
 
+# Install dependencies
 COPY package*.json ./
 RUN npm install --only=production
 
+# Copy source code
 COPY . .
-RUN npm run build
 
+# Expose backend port
+EXPOSE 5000
 
-# ---------- Runtime stage ----------
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY --from=build /app /app
-
-# Start server
+# Start backend server
 CMD ["node", "server.js"]
