@@ -72,3 +72,56 @@ export const getScanBatches = async (req, res) => {
     });
   }
 };
+
+// Get scan statistics
+export const getScanStats = async (req, res) => {
+  try {
+    const stats = await ScanBatchModel.aggregate([
+      {
+        $group: {
+          _id: '$binSize',
+          count: { $sum: { $size: '$qrCodes' } }
+        }
+      }
+    ]);
+
+    const result = {
+      totalQRs: 0,
+      smallQRs: 0,
+      mediumQRs: 0,
+      largeQRs: 0,
+      customQRs: 0
+    };
+
+    stats.forEach(stat => {
+      result.totalQRs += stat.count;
+      switch(stat._id) {
+        case 'small':
+          result.smallQRs = stat.count;
+          break;
+        case 'medium':
+          result.mediumQRs = stat.count;
+          break;
+        case 'large':
+          result.largeQRs = stat.count;
+          break;
+        case 'custom':
+          result.customQRs = stat.count;
+          break;
+      }
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('Get scan stats error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
