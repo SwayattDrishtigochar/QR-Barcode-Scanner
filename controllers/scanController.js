@@ -3,51 +3,84 @@ import ScanBatchModel from "../models/ScanBatchModel.js";
 // Create new scan batch
 export const createScanBatch = async (req, res) => {
   try {
-    const { qrCodes, binSize, customBinValue } = req.body;
+    const { qrCodes, binSize } = req.body;
 
     // Validation
     if (!qrCodes || !Array.isArray(qrCodes) || qrCodes.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'QR codes array is required and cannot be empty'
+        message: "QR codes array is required and cannot be empty",
       });
     }
 
-    if (!binSize || !['small', 'medium', 'large', 'custom'].includes(binSize)) {
+    if (!binSize || binSize.trim() === "") {
       return res.status(400).json({
         success: false,
-        message: 'Valid bin size is required (small, medium, large, custom)'
+        message: "Bin size is required",
       });
     }
 
-    if (binSize === 'custom' && (!customBinValue || customBinValue.trim() === '')) {
+    // Filter empty strings
+    const cleanedQRCodes = qrCodes.filter((qr) => qr && qr.trim() !== "");
+
+    // Check for duplicate QR codes in the submitted array
+    const uniqueQRCodes = [...new Set(cleanedQRCodes)];
+    if (uniqueQRCodes.length !== cleanedQRCodes.length) {
       return res.status(400).json({
         success: false,
-        message: 'Custom bin value is required when bin size is custom'
+        message: "Duplicate QR codes found in submission",
       });
     }
 
-    // Create scan batch
-    const scanBatch = new ScanBatchModel({
-      qrCodes: qrCodes.filter(qr => qr && qr.trim() !== ''), // Remove empty strings
-      binSize,
-      customBinValue: binSize === 'custom' ? customBinValue.trim() : null
+    // Check if any QR code already exists in the database (across all binSizes)
+    const existingBatches = await ScanBatchModel.find({
+      qrCodes: { $in: uniqueQRCodes },
     });
 
-    const savedBatch = await scanBatch.save();
+    if (existingBatches.length > 0) {
+      const existingQRCodes = [];
+      existingBatches.forEach((batch) => {
+        batch.qrCodes.forEach((qr) => {
+          if (uniqueQRCodes.includes(qr)) {
+            existingQRCodes.push(qr);
+          }
+        });
+      });
+
+      return res.status(400).json({
+        success: false,
+        message: `QR codes already exist in database: ${[...new Set(existingQRCodes)].join(", ")}`,
+      });
+    }
+
+    // Find or create document for this binSize
+    let scanBatch = await ScanBatchModel.findOne({ binSize: binSize });
+
+    if (scanBatch) {
+      // Add new QR codes to existing batch
+      scanBatch.qrCodes.push(...uniqueQRCodes);
+      scanBatch.scannedAt = Date.now();
+      await scanBatch.save();
+    } else {
+      // Create new batch for this binSize
+      scanBatch = new ScanBatchModel({
+        qrCodes: uniqueQRCodes,
+        binSize: binSize,
+      });
+      await scanBatch.save();
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Scan batch created successfully',
-      data: savedBatch
+      message: "QR codes added successfully",
+      data: scanBatch,
     });
-
   } catch (error) {
-    console.error('Create scan batch error:', error);
+    console.error("Create scan batch error:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -60,15 +93,14 @@ export const getScanBatches = async (req, res) => {
     res.json({
       success: true,
       data: batches,
-      count: batches.length
+      count: batches.length,
     });
-
   } catch (error) {
-    console.error('Get scan batches error:', error);
+    console.error("Get scan batches error:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -76,52 +108,52 @@ export const getScanBatches = async (req, res) => {
 // Get scan statistics
 export const getScanStats = async (req, res) => {
   try {
-    const stats = await ScanBatchModel.aggregate([
-      {
-        $group: {
-          _id: '$binSize',
-          count: { $sum: { $size: '$qrCodes' } }
-        }
-      }
-    ]);
+    const batches = await ScanBatchModel.find();
 
-    const result = {
-      totalQRs: 0,
-      smallQRs: 0,
-      mediumQRs: 0,
-      largeQRs: 0,
-      customQRs: 0
-    };
+    const stats = batches.map((batch) => ({
+      binSize: batch.binSize,
+      count: batch.qrCodes.length,
+      lastScannedAt: batch.scannedAt,
+    }));
 
-    stats.forEach(stat => {
-      result.totalQRs += stat.count;
-      switch(stat._id) {
-        case 'small':
-          result.smallQRs = stat.count;
-          break;
-        case 'medium':
-          result.mediumQRs = stat.count;
-          break;
-        case 'large':
-          result.largeQRs = stat.count;
-          break;
-        case 'custom':
-          result.customQRs = stat.count;
-          break;
-      }
-    });
+    const totalQRCodes = stats.reduce((sum, stat) => sum + stat.count, 0);
 
     res.json({
       success: true,
-      data: result
+      data: {
+        stats: stats,
+        totalQRCodes: totalQRCodes,
+        totalBinSizes: stats.length,
+      },
     });
-
   } catch (error) {
-    console.error('Get scan stats error:', error);
+    console.error("Get scan stats error:", error);
     res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Get distinct bin sizes
+export const getDistinctBinSizes = async (req, res) => {
+  try {
+    // Get all distinct bin sizes
+    const binSizes = await ScanBatchModel.distinct("binSize");
+
+    res.json({
+      success: true,
+      data: {
+        binSizes: binSizes,
+      },
+    });
+  } catch (error) {
+    console.error("Get distinct bin sizes error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
