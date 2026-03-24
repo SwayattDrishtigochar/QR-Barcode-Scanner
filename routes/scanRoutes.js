@@ -4,6 +4,8 @@ import {
   getScanBatches,
   getScanStats,
   getDistinctBinSizes,
+  getRecentScanBatches,
+  deleteScanBatch,
 } from "../controllers/scanController.js";
 
 const router = Router();
@@ -19,5 +21,11 @@ router.get("/stats", getScanStats);
 
 // GET /api/scans/bin-sizes - Get distinct bin sizes
 router.get("/bin-sizes", getDistinctBinSizes);
+
+// GET /api/scans/recent - Get latest 10 scan batches
+router.get("/recent", getRecentScanBatches);
+
+// DELETE /api/scans/:id - Delete a scan batch by id
+router.delete("/:id", deleteScanBatch);
 
 export default router;

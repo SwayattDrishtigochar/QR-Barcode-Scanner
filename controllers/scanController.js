@@ -157,3 +157,115 @@ export const getDistinctBinSizes = async (req, res) => {
     });
   }
 };
+
+// Get latest 10 scanned RFID entries
+export const getRecentScanBatches = async (req, res) => {
+  try {
+    const recentScans = await ScanBatchModel.aggregate([
+      { $unwind: "$qrCodes" },
+      { $sort: { scannedAt: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 1,
+          qrCode: "$qrCodes",
+          binSize: "$binSize",
+          scannedRfid: { $concat: ["$qrCodes", " (", "$binSize", ")"] },
+          scannedAt: "$scannedAt",
+        },
+      },
+    ]);
+
+    res.json({
+      success: true,
+      data: recentScans,
+      count: recentScans.length,
+    });
+  } catch (error) {
+    console.error("Get recent scan batches error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Delete a scan batch by id
+export const deleteScanBatch = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rfid = (req.body && req.body.rfid) || req.query.rfid;
+
+    // If RFID is provided, delete only that RFID from the batch.
+    if (rfid) {
+      const batch = await ScanBatchModel.findById(id);
+
+      if (!batch) {
+        return res.status(404).json({
+          success: false,
+          message: "Scan batch not found",
+        });
+      }
+
+      if (!batch.qrCodes.includes(rfid)) {
+        return res.status(404).json({
+          success: false,
+          message: "RFID not found in selected scan batch",
+        });
+      }
+
+      const updatedQRCodes = batch.qrCodes.filter((code) => code !== rfid);
+
+      if (updatedQRCodes.length === 0) {
+        await ScanBatchModel.findByIdAndDelete(id);
+
+        return res.json({
+          success: true,
+          message: "RFID deleted successfully. Empty batch removed.",
+          data: {
+            _id: id,
+            deletedRfid: rfid,
+            batchDeleted: true,
+          },
+        });
+      }
+
+      batch.qrCodes = updatedQRCodes;
+      await batch.save();
+
+      return res.json({
+        success: true,
+        message: "RFID deleted successfully",
+        data: {
+          _id: batch._id,
+          deletedRfid: rfid,
+          batchDeleted: false,
+        },
+      });
+    }
+
+    // Backward compatibility: if no RFID is supplied, delete entire batch.
+    const deletedBatch = await ScanBatchModel.findByIdAndDelete(id);
+
+    if (!deletedBatch) {
+      return res.status(404).json({
+        success: false,
+        message: "Scan batch not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Scan batch deleted successfully",
+      data: deletedBatch,
+    });
+  } catch (error) {
+    console.error("Delete scan batch error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
