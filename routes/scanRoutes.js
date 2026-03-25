@@ -6,6 +6,7 @@ import {
   getDistinctBinSizes,
   getRecentScanBatches,
   deleteScanBatch,
+  updateScanBinSize,
 } from "../controllers/scanController.js";
 
 const router = Router();
@@ -27,5 +28,8 @@ router.get("/recent", getRecentScanBatches);
 
 // DELETE /api/scans/:id - Delete a scan batch by id
 router.delete("/:id", deleteScanBatch);
+
+// PUT /api/scans/:id - Update bin size for one scanned RFID
+router.put("/:id", updateScanBinSize);
 
 export default router;

@@ -269,3 +269,116 @@ export const deleteScanBatch = async (req, res) => {
     });
   }
 };
+
+// Update bin size for a specific scanned RFID entry
+export const updateScanBinSize = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { qrCode, binSize } = req.body;
+
+    if (!qrCode || !qrCode.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "RFID is required",
+      });
+    }
+
+    if (!binSize || !binSize.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Bin size is required",
+      });
+    }
+
+    const normalizedQrCode = qrCode.trim();
+    const targetBinSize = binSize.trim();
+
+    const sourceBatch = await ScanBatchModel.findById(id);
+    if (!sourceBatch) {
+      return res.status(404).json({
+        success: false,
+        message: "Scan batch not found",
+      });
+    }
+
+    if (!sourceBatch.qrCodes.includes(normalizedQrCode)) {
+      return res.status(404).json({
+        success: false,
+        message: "RFID not found in selected scan batch",
+      });
+    }
+
+    if (sourceBatch.binSize === targetBinSize) {
+      return res.json({
+        success: true,
+        message: "Bin size is unchanged",
+      });
+    }
+
+    const targetBatch = await ScanBatchModel.findOne({ binSize: targetBinSize });
+
+    if (targetBatch && String(targetBatch._id) !== String(sourceBatch._id)) {
+      if (targetBatch.qrCodes.includes(normalizedQrCode)) {
+        return res.status(400).json({
+          success: false,
+          message: "RFID already exists in the target bin size",
+        });
+      }
+
+      targetBatch.qrCodes.push(normalizedQrCode);
+      targetBatch.scannedAt = Date.now();
+      await targetBatch.save();
+
+      sourceBatch.qrCodes = sourceBatch.qrCodes.filter(
+        (code) => code !== normalizedQrCode,
+      );
+
+      if (sourceBatch.qrCodes.length === 0) {
+        await ScanBatchModel.findByIdAndDelete(sourceBatch._id);
+      } else {
+        sourceBatch.scannedAt = Date.now();
+        await sourceBatch.save();
+      }
+
+      return res.json({
+        success: true,
+        message: "Bin size updated successfully",
+      });
+    }
+
+    if (sourceBatch.qrCodes.length === 1) {
+      sourceBatch.binSize = targetBinSize;
+      sourceBatch.scannedAt = Date.now();
+      await sourceBatch.save();
+
+      return res.json({
+        success: true,
+        message: "Bin size updated successfully",
+      });
+    }
+
+    sourceBatch.qrCodes = sourceBatch.qrCodes.filter(
+      (code) => code !== normalizedQrCode,
+    );
+    sourceBatch.scannedAt = Date.now();
+    await sourceBatch.save();
+
+    await new ScanBatchModel({
+      qrCodes: [normalizedQrCode],
+      binSize: targetBinSize,
+      scannedAt: Date.now(),
+    }).save();
+
+    return res.json({
+      success: true,
+      message: "Bin size updated successfully",
+    });
+  } catch (error) {
+    console.error("Update scan bin size error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
