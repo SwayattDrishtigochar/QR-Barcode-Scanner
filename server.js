@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 import express, { json } from 'express';
 import cors from 'cors';
 import connectDB from './config/database.js';
-import scanRoutes from './routes/scanRoutes.js';
+import binScannerRoutes from './routes/binScannerRoutes.js';
 
 dotenv.config();
 const app = express();
@@ -21,7 +21,7 @@ app.use(
 app.use(json());
 
 // Routes
-app.use('/api/scans', scanRoutes);
+app.use('/api/bin-scans', binScannerRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
