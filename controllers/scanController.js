@@ -158,13 +158,12 @@ export const getDistinctBinSizes = async (req, res) => {
   }
 };
 
-// Get latest 10 scanned RFID entries
+// Get all scanned RFID entries sorted by newest first
 export const getRecentScanBatches = async (req, res) => {
   try {
     const recentScans = await ScanBatchModel.aggregate([
       { $unwind: "$qrCodes" },
       { $sort: { scannedAt: -1 } },
-      { $limit: 10 },
       {
         $project: {
           _id: 1,

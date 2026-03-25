@@ -23,7 +23,7 @@ router.get("/stats", getScanStats);
 // GET /api/scans/bin-sizes - Get distinct bin sizes
 router.get("/bin-sizes", getDistinctBinSizes);
 
-// GET /api/scans/recent - Get latest 10 scan batches
+// GET /api/scans/recent - Get all scan batches (newest first)
 router.get("/recent", getRecentScanBatches);
 
 // DELETE /api/scans/:id - Delete a scan batch by id
